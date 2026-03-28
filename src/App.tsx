@@ -5,6 +5,7 @@ import { UserProfile, Workout, UserRole, WorkoutTemplate } from './types';
 import { LogIn, LogOut, Plus, Dumbbell, Users, ClipboardList, ChevronRight, Trash2, Send, Clock, Weight, Repeat, Save, FileText, Share2, Download, Link as LinkIcon, Check, Zap, Activity, Info, Calendar, XCircle, Video, Copy, Tag, Target, BarChart, Filter, X, ChevronLeft, Mail, MessageCircle, Sun, Moon, GripVertical } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'motion/react';
 import { BrowserRouter, Routes, Route, useParams, useNavigate, Link } from 'react-router-dom';
+import { Toaster, toast } from 'sonner';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -59,6 +60,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
+        <Toaster position="top-center" richColors />
         <Routes>
           <Route path="/workout/:workoutId" element={<PublicWorkout />} />
           <Route path="*" element={<MainApp />} />
@@ -176,7 +178,7 @@ function MainApp() {
       await signInWithPopup(auth, googleProvider);
     } catch (err) {
       console.error('Login error:', err);
-      alert('התחברות נכשלה. אנא וודא שחלונות קופצים מאושרים בדפדפן.');
+      toast.error('התחברות נכשלה. אנא וודא שחלונות קופצים מאושרים בדפדפן.');
     } finally {
       setLoggingIn(null);
     }
@@ -443,7 +445,6 @@ function CoachView({ profile, view, setView, selectedClient, setSelectedClient }
   const [addingClient, setAddingClient] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showScheduleModal, setShowScheduleModal] = useState<{ client: UserProfile } | null>(null);
   const [isStandalone, setIsStandalone] = useState(false);
 
@@ -459,7 +460,7 @@ function CoachView({ profile, view, setView, selectedClient, setSelectedClient }
           await updateDoc(doc(db, 'users', profile.uid), {
             googleTokens: tokens
           });
-          setSuccessMessage('Google Calendar מחובר בהצלחה!');
+          toast.success('Google Calendar מחובר בהצלחה!');
         } catch (err) {
           handleFirestoreError(err, OperationType.UPDATE, `users/${profile.uid}`);
         }
@@ -476,16 +477,9 @@ function CoachView({ profile, view, setView, selectedClient, setSelectedClient }
       window.open(url, 'google_auth', 'width=600,height=700');
     } catch (err) {
       console.error('Failed to get Google Auth URL:', err);
-      alert('נכשל בחיבור ל-Google Calendar');
+      toast.error('נכשל בחיבור ל-Google Calendar');
     }
   };
-
-  useEffect(() => {
-    if (successMessage) {
-      const timer = setTimeout(() => setSuccessMessage(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [successMessage]);
 
   useEffect(() => {
     const q = query(collection(db, 'users'), where('role', '==', 'client'));
@@ -525,7 +519,7 @@ function CoachView({ profile, view, setView, selectedClient, setSelectedClient }
       setShowAddClient(false);
       setNewClientName('');
       setNewClientEmail('');
-      setSuccessMessage('מתאמן נוסף בהצלחה!');
+      toast.success('מתאמן נוסף בהצלחה!');
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'users');
     } finally {
@@ -537,7 +531,7 @@ function CoachView({ profile, view, setView, selectedClient, setSelectedClient }
     try {
       await deleteDoc(doc(db, 'users', clientId));
       setDeleteConfirm(null);
-      setSuccessMessage('המתאמן הוסר בהצלחה');
+      toast.success('המתאמן הוסר בהצלחה');
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `users/${clientId}`);
     }
@@ -551,11 +545,11 @@ function CoachView({ profile, view, setView, selectedClient, setSelectedClient }
   const totalWorkouts: number = (Object.values(clientWorkoutsCount) as number[]).reduce((a: number, b: number) => a + b, 0);
 
   if (view === 'create-workout' && selectedClient) {
-    return <WorkoutForm coach={profile} client={selectedClient} onCancel={() => setView('dashboard')} onSuccess={(msg) => setSuccessMessage(msg)} />;
+    return <WorkoutForm coach={profile} client={selectedClient} onCancel={() => setView('dashboard')} onSuccess={(msg) => toast.success(msg)} />;
   }
 
   if (view === 'templates') {
-    return <TemplatesView coach={profile} clients={clients} onBack={() => setView('dashboard')} onSuccess={(msg) => setSuccessMessage(msg)} />;
+    return <TemplatesView coach={profile} clients={clients} onBack={() => setView('dashboard')} onSuccess={(msg) => toast.success(msg)} />;
   }
 
   if (view === 'client-workouts' && selectedClient) {
@@ -564,20 +558,6 @@ function CoachView({ profile, view, setView, selectedClient, setSelectedClient }
 
   return (
     <div className="space-y-8">
-      <AnimatePresence>
-        {successMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="fixed top-6 left-1/2 -translate-x-1/2 z-[110] bg-emerald-600 text-white px-6 py-3 rounded-2xl shadow-xl font-bold flex items-center gap-2"
-          >
-            <Check className="w-5 h-5" />
-            {successMessage}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       <ConfirmModal 
         isOpen={!!deleteConfirm}
         title="מחיקת מתאמן"
@@ -594,7 +574,7 @@ function CoachView({ profile, view, setView, selectedClient, setSelectedClient }
         <div className="flex flex-wrap gap-3">
           {!isStandalone && (
             <button
-              onClick={() => alert('כדי להתקין את האפליקציה:\n1. לחץ על כפתור השיתוף בדפדפן (ריבוע עם חץ למעלה)\n2. בחר "הוסף למסך הבית" (Add to Home Screen)')}
+              onClick={() => toast.info('כדי להתקין את האפליקציה: 1. לחץ על כפתור השיתוף בדפדפן (ריבוע עם חץ למעלה) 2. בחר "הוסף למסך הבית" (Add to Home Screen)')}
               className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800 px-4 py-2 rounded-xl font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-all"
             >
               <Download className="w-4 h-4" />
@@ -640,7 +620,7 @@ function CoachView({ profile, view, setView, selectedClient, setSelectedClient }
           <button
             onClick={() => {
               navigator.clipboard.writeText(window.location.origin);
-              setSuccessMessage('קישור להרשמה הועתק!');
+              toast.success('קישור להרשמה הועתק!');
             }}
             className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 px-4 py-2 rounded-xl font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-all"
           >
@@ -833,12 +813,12 @@ function CoachView({ profile, view, setView, selectedClient, setSelectedClient }
           ))
         )}
       </div>
-      {showScheduleModal && (
+        {showScheduleModal && (
         <ScheduleModal 
           client={showScheduleModal.client} 
           coach={profile} 
           onClose={() => setShowScheduleModal(null)}
-          onSuccess={(msg) => setSuccessMessage(msg)}
+          onSuccess={(msg) => toast.success(msg)}
         />
       )}
     </div>
@@ -864,7 +844,7 @@ function ScheduleModal({ client, coach, onClose, onSuccess }: {
   const handleSchedule = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!coach.googleTokens) {
-      alert('אנא חבר את Google Calendar תחילה');
+      toast.warning('אנא חבר את Google Calendar תחילה');
       return;
     }
 
@@ -915,7 +895,7 @@ function ScheduleModal({ client, coach, onClose, onSuccess }: {
       onSuccess('האימון נקבע בהצלחה ביומן!');
     } catch (err) {
       console.error('Scheduling error:', err);
-      alert('נכשל בקביעת האימון. אנא נסה שוב.');
+      toast.error('נכשל בקביעת האימון. אנא נסה שוב.');
     } finally {
       setLoading(false);
     }
@@ -1074,6 +1054,7 @@ function TemplatesView({ coach, clients = [], onBack, onSuccess }: {
   const [showCreate, setShowCreate] = useState(false);
   const [sendingTemplate, setSendingTemplate] = useState<WorkoutTemplate | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   useEffect(() => {
     const q = query(collection(db, 'templates'), where('coachId', '==', coach.uid));
@@ -1086,9 +1067,9 @@ function TemplatesView({ coach, clients = [], onBack, onSuccess }: {
   }, [coach.uid]);
 
   const handleDelete = async (id: string) => {
-    if (!confirm('האם אתה בטוח שברצונך למחוק את התבנית?')) return;
     try {
       await deleteDoc(doc(db, 'templates', id));
+      toast.success('התבנית נמחקה בהצלחה');
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `templates/${id}`);
     }
@@ -1114,7 +1095,7 @@ function TemplatesView({ coach, clients = [], onBack, onSuccess }: {
         expiresAt: null
       };
       await setDoc(doc(db, 'workouts', newWorkoutId), newWorkout);
-      alert(`התוכנית נשלחה בהצלחה ל${client.displayName}`);
+      toast.success(`התוכנית נשלחה בהצלחה ל${client.displayName}`);
       setSendingTemplate(null);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'workouts');
@@ -1129,6 +1110,16 @@ function TemplatesView({ coach, clients = [], onBack, onSuccess }: {
 
   return (
     <div className="space-y-8">
+      <ConfirmModal 
+        isOpen={!!deleteConfirm}
+        title="מחיקת תבנית"
+        message="האם אתה בטוח שברצונך למחוק את התבנית?"
+        onConfirm={() => {
+          if (deleteConfirm) handleDelete(deleteConfirm);
+          setDeleteConfirm(null);
+        }}
+        onCancel={() => setDeleteConfirm(null)}
+      />
       <header className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold tracking-tight text-stone-900 dark:text-white">תבניות אימון</h2>
@@ -1177,7 +1168,7 @@ function TemplatesView({ coach, clients = [], onBack, onSuccess }: {
                   <Send className="w-5 h-5" />
                 </button>
                 <button
-                  onClick={() => handleDelete(t.id)}
+                  onClick={() => setDeleteConfirm(t.id)}
                   className="p-2 text-stone-300 dark:text-stone-600 hover:text-red-500 transition-colors"
                 >
                   <Trash2 className="w-5 h-5" />
@@ -1293,7 +1284,7 @@ function WorkoutForm({ coach, client, onCancel, onSuccess, isTemplateOnly = fals
 
   const handleSaveTemplate = async () => {
     if (!title || exercises.some(ex => !ex.name)) {
-      alert('נא למלא כותרת ולפחות שם לכל תרגיל לפני שמירה כתבנית');
+      toast.error('נא למלא כותרת ולפחות שם לכל תרגיל לפני שמירה כתבנית');
       return;
     }
     try {
@@ -1305,7 +1296,7 @@ function WorkoutForm({ coach, client, onCancel, onSuccess, isTemplateOnly = fals
         intensity,
         exercises
       });
-      alert('התבנית נשמרה בהצלחה!');
+      toast.success('התבנית נשמרה בהצלחה!');
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'templates');
     }
@@ -1323,7 +1314,7 @@ function WorkoutForm({ coach, client, onCancel, onSuccess, isTemplateOnly = fals
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || exercises.some(ex => !ex.name)) {
-      alert('נא למלא כותרת ולפחות שם לכל תרגיל');
+      toast.error('נא למלא כותרת ולפחות שם לכל תרגיל');
       return;
     }
 
@@ -1344,6 +1335,7 @@ function WorkoutForm({ coach, client, onCancel, onSuccess, isTemplateOnly = fals
         goal,
         intensity,
         exercises,
+        isPublic: true,
         createdAt: Timestamp.now(),
       };
       await addDoc(collection(db, 'workouts'), workoutData);
@@ -1742,15 +1734,7 @@ function WorkoutList({ profile, targetClient, clients = [], onBack }: {
   const [isSending, setIsSending] = useState(false);
   const [deleteWorkoutId, setDeleteWorkoutId] = useState<string | null>(null);
   const [deleteClientId, setDeleteClientId] = useState<boolean>(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const workoutRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
-
-  useEffect(() => {
-    if (successMessage) {
-      const timer = setTimeout(() => setSuccessMessage(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [successMessage]);
 
   useEffect(() => {
     let q;
@@ -1786,7 +1770,7 @@ function WorkoutList({ profile, targetClient, clients = [], onBack }: {
     try {
       await deleteDoc(doc(db, 'workouts', id));
       setDeleteWorkoutId(null);
-      setSuccessMessage('התוכנית נמחקה בהצלחה');
+      toast.success('התוכנית נמחקה בהצלחה');
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `workouts/${id}`);
     }
@@ -1838,14 +1822,14 @@ function WorkoutList({ profile, targetClient, clients = [], onBack }: {
       pdf.save(`workout-${workout.title}.pdf`);
     } catch (err) {
       console.error('PDF Export error:', err);
-      setSuccessMessage('שגיאה בייצוא PDF');
+      toast.error('שגיאה בייצוא PDF');
     }
   };
 
   const copyShareLink = (workoutId: string) => {
     const url = `${window.location.origin}/workout/${workoutId}`;
     navigator.clipboard.writeText(url);
-    setSuccessMessage('הקישור הועתק ללוח!');
+    toast.success('הקישור הועתק ללוח!');
   };
 
   const handleShareEmail = (workout: Workout) => {
@@ -1902,10 +1886,10 @@ function WorkoutList({ profile, targetClient, clients = [], onBack }: {
         }
       }, 500);
 
-      setSuccessMessage('פותח את יישום המייל...');
+      toast.info('פותח את יישום המייל...');
     } catch (err) {
       console.error('Email share error:', err);
-      setSuccessMessage('שגיאה בפתיחת המייל');
+      toast.error('שגיאה בפתיחת המייל');
     }
   };
 
@@ -1940,10 +1924,10 @@ function WorkoutList({ profile, targetClient, clients = [], onBack }: {
         window.location.href = whatsappUrl;
       }
       
-      setSuccessMessage('פותח את וואטסאפ...');
+      toast.info('פותח את וואטסאפ...');
     } catch (err) {
       console.error('WhatsApp share error:', err);
-      setSuccessMessage('שגיאה בשיתוף לוואטסאפ');
+      toast.error('שגיאה בשיתוף לוואטסאפ');
     }
   };
 
@@ -1968,7 +1952,7 @@ function WorkoutList({ profile, targetClient, clients = [], onBack }: {
         shareToken: null
       };
       await setDoc(doc(db, 'workouts', newWorkoutId), newWorkout);
-      setSuccessMessage(`התוכנית נשלחה בהצלחה ל${client.displayName}`);
+      toast.success(`התוכנית נשלחה בהצלחה ל${client.displayName}`);
       setSendingWorkout(null);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'workouts');
@@ -1992,20 +1976,6 @@ function WorkoutList({ profile, targetClient, clients = [], onBack }: {
 
   return (
     <div className="space-y-8">
-      <AnimatePresence>
-        {successMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="fixed top-6 left-1/2 -translate-x-1/2 z-[110] bg-emerald-600 text-white px-6 py-3 rounded-2xl shadow-xl font-bold flex items-center gap-2"
-          >
-            <Check className="w-5 h-5" />
-            {successMessage}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       <ConfirmModal 
         isOpen={!!deleteWorkoutId}
         title="מחיקת תוכנית"
@@ -2474,7 +2444,7 @@ function PublicWorkout() {
       pdf.save(`workout-${workout.title}.pdf`);
     } catch (err) {
       console.error('PDF Export error:', err);
-      alert('שגיאה בייצוא PDF');
+      toast.error('שגיאה בייצוא PDF');
     }
   };
 
@@ -2505,9 +2475,7 @@ function PublicWorkout() {
             <button
               onClick={() => {
                 navigator.clipboard.writeText(window.location.href);
-                // Using a custom toast/message would be better, but keeping it simple for now
-                // since we don't have a global toast system in this component
-                alert('הקישור הועתק!');
+                toast.success('הקישור הועתק!');
               }}
               className="p-2 text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-300 transition-colors"
               title="העתק קישור"
