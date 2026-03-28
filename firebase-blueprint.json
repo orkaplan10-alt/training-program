@@ -1,0 +1,96 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the application (coach or client).",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique ID of the user." },
+        "email": { "type": "string", "description": "The email of the user." },
+        "role": { "type": "string", "enum": ["coach", "client"], "description": "The role of the user." },
+        "displayName": { "type": "string", "description": "The display name of the user." },
+        "googleTokens": { "type": "object", "description": "Google OAuth tokens for calendar integration." }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Workout": {
+      "title": "Workout",
+      "description": "A workout plan created by a coach for a client.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The unique ID of the workout." },
+        "coachId": { "type": "string", "description": "The UID of the coach who created it." },
+        "clientId": { "type": "string", "description": "The UID of the client it is assigned to." },
+        "title": { "type": "string", "description": "The title of the workout plan." },
+        "exercises": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "sets": { "type": "number" },
+              "reps": { "type": "number" },
+              "weight": { "type": "string" },
+              "rest": { "type": "string" },
+              "tempo": { "type": "string" },
+              "rpe": { "type": "number" },
+              "notes": { "type": "string" },
+              "instructions": { "type": "string" },
+              "videoUrl": { "type": "string" },
+              "type": { "type": "string", "enum": ["warm-up", "main", "cool-down"] }
+            }
+          }
+        },
+        "isPublic": { "type": "boolean", "description": "Whether the workout is publicly accessible via a link." },
+        "shareToken": { "type": "string", "description": "A unique token for sharing the workout." },
+        "expiresAt": { "type": "string", "format": "date-time", "description": "The date and time when the shared link expires." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["coachId", "clientId", "title", "exercises", "createdAt"]
+    },
+    "WorkoutTemplate": {
+      "title": "WorkoutTemplate",
+      "description": "A reusable workout structure saved by a coach.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The unique ID of the template." },
+        "coachId": { "type": "string", "description": "The UID of the coach who created it." },
+        "title": { "type": "string", "description": "The title of the template." },
+        "exercises": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "sets": { "type": "number" },
+              "reps": { "type": "number" },
+              "weight": { "type": "string" },
+              "rest": { "type": "string" },
+              "tempo": { "type": "string" },
+              "rpe": { "type": "number" },
+              "notes": { "type": "string" },
+              "instructions": { "type": "string" },
+              "videoUrl": { "type": "string" },
+              "type": { "type": "string", "enum": ["warm-up", "main", "cool-down"] }
+            }
+          }
+        }
+      },
+      "required": ["coachId", "title", "exercises"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles."
+    },
+    "/workouts/{workoutId}": {
+      "schema": "Workout",
+      "description": "Workout plans."
+    },
+    "/templates/{templateId}": {
+      "schema": "WorkoutTemplate",
+      "description": "Reusable workout templates created by coaches."
+    }
+  }
+}

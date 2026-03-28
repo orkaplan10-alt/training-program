@@ -1,0 +1,132 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required) - The unique ID of the user.
+    //   - email: string (required) - The email of the user.
+    //   - role: string (required, enum: ["coach", "client"]) - The role of the user.
+    //   - displayName: string (optional) - The display name of the user.
+    //
+    // Collection: workouts
+    // Document ID: {workoutId}
+    // Fields:
+    //   - id: string (required) - The unique ID of the workout.
+    //   - coachId: string (required) - The UID of the coach who created it.
+    //   - clientId: string (required) - The UID of the client it is assigned to.
+    //   - title: string (required) - The title of the workout plan.
+    //   - exercises: list (required) - List of exercise objects.
+    //   - createdAt: timestamp (required) - When the workout was created.
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isCoach() {
+      return isAuthenticated() && (
+        (request.auth.token.email == "or.kaplan10@gmail.com" && request.auth.token.email_verified == true) ||
+        (request.auth.token.email == "or.olympic@gmail.com" && request.auth.token.email_verified == true) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'coach')
+      );
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'role']) &&
+             data.uid is string && data.uid.size() > 0 &&
+             data.email is string && data.email.size() > 0 &&
+             data.role in ['coach', 'client'] &&
+             (!('googleTokens' in data) || data.googleTokens == null || data.googleTokens is map);
+    }
+
+    function isValidWorkout(data) {
+      return data.keys().hasAll(['coachId', 'clientId', 'title', 'exercises', 'createdAt']) &&
+             data.coachId is string && data.coachId.size() > 0 &&
+             data.clientId is string && data.clientId.size() > 0 &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.exercises is list && data.exercises.size() < 50 &&
+             (data.createdAt is timestamp || data.createdAt is string) &&
+             (!('isPublic' in data) || data.isPublic == null || data.isPublic is bool) &&
+             (!('shareToken' in data) || data.shareToken == null || data.shareToken is string) &&
+             (!('expiresAt' in data) || data.expiresAt == null || data.expiresAt is timestamp) &&
+             (!('category' in data) || data.category == null || data.category is string) &&
+             (!('goal' in data) || data.goal == null || data.goal is string) &&
+             (!('intensity' in data) || data.intensity == null || data.intensity is string);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      // Users can read their own profile, and coaches can read all user profiles to find clients.
+      // Also allow reading by email for migration lookup.
+      allow read: if isAuthenticated() && (isOwner(userId) || isCoach() || request.auth.token.email.lower() == userId.lower());
+      
+      // Users can create/update their own profile.
+      // Coaches can also create/update client profiles.
+      allow create: if (isOwner(userId) || isCoach() || request.auth.token.email.lower() == userId.lower()) && isValidUser(request.resource.data);
+      allow update: if (isOwner(userId) || isCoach()) && isValidUser(request.resource.data) && 
+                    (isCoach() || request.resource.data.role == resource.data.role);
+      
+      // Allow deletion for migration (when moving from email-based ID to UID-based ID)
+      allow delete: if isAuthenticated() && (isOwner(userId) || isCoach() || request.auth.token.email.lower() == userId.lower());
+    }
+
+    match /workouts/{workoutId} {
+      // Coaches can read workouts they created, clients can read workouts assigned to them.
+      // Or if the workout is explicitly marked as public and not expired.
+      allow read: if (isAuthenticated() && (
+        resource.data.coachId == request.auth.uid || 
+        resource.data.clientId == request.auth.uid ||
+        resource.data.clientId.lower() == request.auth.token.email.lower()
+      )) || (
+        resource.data.isPublic == true && 
+        (!('expiresAt' in resource.data) || resource.data.expiresAt > request.time)
+      );
+
+      // Only coaches can create workouts.
+      allow create: if isCoach() && isValidWorkout(request.resource.data) && 
+                    request.resource.data.coachId == request.auth.uid;
+
+      // Only the coach who created the workout can update or delete it.
+      // EXCEPTION: Allow client to update their own clientId during migration.
+      allow update: if (isCoach() && resource.data.coachId == request.auth.uid && 
+                    isValidWorkout(request.resource.data) &&
+                    request.resource.data.coachId == resource.data.coachId) ||
+                    (isAuthenticated() && 
+                     resource.data.clientId.lower() == request.auth.token.email.lower() && 
+                     request.resource.data.clientId == request.auth.uid &&
+                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clientId']));
+      
+      allow delete: if isCoach() && resource.data.coachId == request.auth.uid;
+    }
+
+    match /templates/{templateId} {
+      // Only the coach who created the template can read/write it.
+      allow read, write: if isCoach() && (
+        (request.method == 'create' && request.resource.data.coachId == request.auth.uid) ||
+        (resource.data.coachId == request.auth.uid)
+      );
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}
